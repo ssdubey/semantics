@@ -2,8 +2,10 @@ type content =
 |Node
 |Content
 
+
 type branch =
 |Branch of string
+
 
 (*for keys*)
 type hash = 
@@ -11,6 +13,7 @@ type hash =
 |Hash_tree of ((content * string * hash) list)
 |Hash_commit of ((hash list) * hash)
 |Hash_dummy
+
 
 (*for values*)
 type commit =
@@ -22,10 +25,12 @@ type tree =
 type block = 
 |Block of string
 
+
 type value =
 |Value_commit of commit
 |Value_tree of tree
 |Value_block of block
+
 
 module Tag_module = 
 	struct
@@ -34,6 +39,7 @@ module Tag_module =
 			match t1, t2 with
 			|Branch (b1), Branch (b2) -> String.compare b1 b2
 	end
+
 
 module TagMap = Map.Make (Tag_module)
 
@@ -54,6 +60,7 @@ module Block_module =
 			|Hash_commit (x, y), Hash_commit (a, b) -> compare y b
 	end
 
+
 module BlockMap = Map.Make (Block_module)
 
 
@@ -63,6 +70,7 @@ let read_tagstore br tagstore =
 	with
 	_ -> None (*Commit ([Hash_dummy], Hash_dummy)*)
 
+
 let read_blockstore node_hash blockstore =
 	BlockMap.find node_hash blockstore
 
@@ -71,7 +79,152 @@ let get_tree_hash commit_node =
 	let _, tree_hash = commit_node in 
 	tree_hash
 
-let filldummy blockstore tagstore =
+
+let findtag branch tagstore =
+	try
+	Some(TagMap.find (Branch branch) tagstore)
+	with
+	_ -> None
+	
+	
+let banyan_add_first branch key value blockstore tagstore =
+	let blob_hash = Hash_block(value) in
+	let blockstore = BlockMap.add blob_hash (Value_block (Block (value))) blockstore in 
+	let new_tree_node = [(Content, key, blob_hash)] in
+	let blockstore = BlockMap.add (Hash_tree(new_tree_node)) (Value_tree (Tree (new_tree_node))) blockstore in
+	let new_commit_node = ([Hash_dummy], Hash_tree(new_tree_node)) in
+	let blockstore = BlockMap.add (Hash_commit(new_commit_node)) (Value_commit (Commit (new_commit_node))) blockstore in
+	let tagstore = TagMap.add (Branch branch) (Hash_commit(new_commit_node)) tagstore in 
+	blockstore, tagstore
+
+
+let banyan_add_new commit_hash branch key value blockstore tagstore =
+	let commit_node = (match commit_hash with
+						|Hash_commit node -> node) in (*node is equivalent to new_commit_node in Hash_commit(new_commit_node))*)
+	let (_, tree_hash) = commit_node in (*tree hash is equivalent to Hash_tree(new_tree_node)*)
+	let tree_node_value = BlockMap.find tree_hash blockstore in (*tree_node_value should be (Value_tree (Tree (new_tree_node)))*)
+	let tree_node = (match tree_node_value with (*tree_node is new_tree_node*)
+					|Value_tree (Tree x) -> x)in
+	
+	let blob_hash = Hash_block(value) in
+	let blockstore = BlockMap.add blob_hash (Value_block (Block (value))) blockstore in 
+	
+	let new_tree_node = (Content, key, blob_hash) in
+	let tree_node' = new_tree_node::tree_node in
+	let blockstore = BlockMap.add (Hash_tree(tree_node')) (Value_tree (Tree (tree_node'))) blockstore in
+	
+	let new_commit_node = ([Hash_dummy], Hash_tree(tree_node')) in  (*parent is still dummy, because we are fillingin only types, not values: (hash list * hash) list * hash*)
+	let blockstore = BlockMap.add (Hash_commit(new_commit_node)) (Value_commit (Commit (new_commit_node))) blockstore in
+	
+	let tagstore = TagMap.add (Branch branch) (Hash_commit(new_commit_node)) tagstore in 
+			
+	blockstore, tagstore
+
+
+let banyan_add branch key value blockstore tagstore =
+
+	let blockstore, tagstore = (match (findtag branch tagstore) with
+	|Some commit_hash -> print_string "some " ; banyan_add_new commit_hash branch key value blockstore tagstore
+	|None -> print_string "none "; banyan_add_first branch key value blockstore tagstore) in
+	blockstore, tagstore
+	
+	
+let rec find_tree_node key treelist =
+	match treelist with 
+	|[] -> (Hash_block "")
+	|(_, k, v)::[] -> 
+		if(String.compare k key == 0) then v else (Hash_block "")	
+	|(_, k, v)::t -> 
+		if (String.compare k key ==0) then v else (find_tree_node key t)
+		
+	
+let banyan_read branch key blockstore tagstore =
+
+	let item = match (findtag branch tagstore) with
+		|Some x -> x
+		|None -> failwith "illegal branch" in
+	
+		
+	let item = (match item with 
+	|Hash_commit (_, x) -> match x with 
+		|Hash_tree (treelist) -> 
+			let v = find_tree_node key treelist in
+				(match v with
+				|Hash_block z -> 
+					match z with 
+					|value -> print_string ("value found: "^value^"\n") 
+					|_ -> print_string "string didnt match\n") 
+	
+	) in
+	 
+	()
+	
+	
+	(*testing*)
+let test_banyan_add_first branch key value blockstore tagstore =
+	
+	let (blockstore, tagstore) = banyan_add_first branch key value blockstore tagstore in
+	
+	let item = match (findtag branch tagstore) with
+		|Some x -> x
+		|None -> failwith "illegal branch" in
+	let item = match item with 
+	|Hash_commit (_, x) -> match x with 
+		|Hash_tree (treelist) -> 
+			let v = find_tree_node key treelist in
+				(match v with
+				|Hash_block z -> match z with 
+				|value -> print_string "tag commit matched\n" 
+				|_ -> print_string "string didnt match") in	
+	 
+	()
+	
+	
+let test_banyan_read branch key value blockstore tagstore = 
+	let item = match (findtag branch tagstore) with
+			|Some x -> x
+			|None -> failwith "illegal branch" in
+		let item = match item with 
+		|Hash_commit (_, x) -> match x with 
+			|Hash_tree (treelist) -> 
+				let v = find_tree_node key treelist in
+					(match v with
+					|Hash_block z -> if(String.compare z value ==0 ) 
+									then (print_string ("read test passed: "^value ^"\n"))
+									else (print_string "read test failed")) in
+								 
+		()
+
+(*testing*)
+
+let banyan_op branch key value blockstore tagstore =
+	let blockstore, tagstore = banyan_add branch key value blockstore tagstore in 
+	blockstore, tagstore
+	
+	
+let _ = 
+	let tagstore = TagMap.empty in
+	let blockstore = BlockMap.empty in
+	
+	let blockstore, tagstore = banyan_op "branch" "key" "value3" blockstore tagstore in
+	let blockstore, tagstore = banyan_op "branch" "key1" "value1" blockstore tagstore in
+	let blockstore, tagstore = banyan_op "branch1" "key2" "value2" blockstore tagstore in
+	
+	let _ = banyan_read "branch" "key1" blockstore tagstore in 
+	let _ = banyan_read "branch" "key1" blockstore tagstore in 
+	let _ = banyan_read "branch" "key" blockstore tagstore in 
+	
+	let _ = test_banyan_read "branch" "key" "value3" blockstore tagstore in
+	let _ = test_banyan_read "branch1" "key2" "value2" blockstore tagstore in
+	
+	()
+	
+	
+	
+	(*--------------------------------------------------------------------------------------------------------------*)
+	
+	(*
+	let filldummy blockstore tagstore =
 	let blockstore = BlockMap.add (Hash_block("value")) (Value_block (Block ("value"))) blockstore in 
 	
 	let item1 = BlockMap.find (Hash_block("value")) blockstore in 
@@ -110,133 +263,8 @@ let filldummy blockstore tagstore =
 	 
 	(blockstore, tagstore)
 	
-	(*let tagstore = TagMap.add (Branch "branch") (Hash_commit([], Tree_hash(Content, "path", *)
-
-let findtag branch tagstore =
-	try
-	Some(TagMap.find (Branch branch) tagstore)
-	with
-	_ -> None
 	
-let banyan_add_first branch key value blockstore tagstore =
-	let blob_hash = Hash_block(value) in
-	let blockstore = BlockMap.add blob_hash (Value_block (Block (value))) blockstore in 
-	let new_tree_node = [(Content, key, blob_hash)] in
-	let blockstore = BlockMap.add (Hash_tree(new_tree_node)) (Value_tree (Tree (new_tree_node))) blockstore in
-	let new_commit_node = ([Hash_dummy], Hash_tree(new_tree_node)) in
-	let blockstore = BlockMap.add (Hash_commit(new_commit_node)) (Value_commit (Commit (new_commit_node))) blockstore in
-	let tagstore = TagMap.add (Branch branch) (Hash_commit(new_commit_node)) tagstore in 
-	blockstore, tagstore
-
-let banyan_add_new commit_hash branch key value blockstore tagstore =
-	let commit_node = (match commit_hash with
-						|Hash_commit node -> node) in (*node is equivalent to new_commit_node in Hash_commit(new_commit_node))*)
-	let (_, tree_hash) = commit_node in (*tree hash is equivalent to Hash_tree(new_tree_node)*)
-	let tree_node_value = BlockMap.find tree_hash blockstore in (*tree_node_value should be (Value_tree (Tree (new_tree_node)))*)
-	let tree_node = (match tree_node_value with (*tree_node is new_tree_node*)
-					|Value_tree (Tree x) -> x)in
-	
-	let blob_hash = Hash_block(value) in
-	let blockstore = BlockMap.add blob_hash (Value_block (Block (value))) blockstore in 
-	
-	let new_tree_node = (Content, key, blob_hash) in
-	let tree_node' = new_tree_node::tree_node in
-	let blockstore = BlockMap.add (Hash_tree(tree_node')) (Value_tree (Tree (tree_node'))) blockstore in
-	
-	let new_commit_node = ([Hash_dummy], Hash_tree(tree_node')) in  (*parent is still dummy, because we are fillingin only types, not values: (hash list * hash) list * hash*)
-	let blockstore = BlockMap.add (Hash_commit(new_commit_node)) (Value_commit (Commit (new_commit_node))) blockstore in
-	
-	let tagstore = TagMap.add (Branch branch) (Hash_commit(new_commit_node)) tagstore in 
-	
-(*	let item = match (findtag branch tagstore) with
-		|Some x -> x
-		|None -> failwith "illegal branch" in
-	
-		
-	let item = (match item with 
-	|Hash_commit (_,x) -> 
-		match x with 
-		|Hash_tree ((_,_,y)::_) -> 
-			match y with 
-			|Hash_block z -> 
-				match  z with 
-				|value -> print_string ("value found "^ value)
-		
-	) in
-	*) 
-		
-	blockstore, tagstore
-
-let banyan_add branch key value blockstore tagstore =
-
-	let blockstore, tagstore = (match (findtag branch tagstore) with
-	|Some commit_hash -> print_string "some " ; banyan_add_new commit_hash branch key value blockstore tagstore
-	|None -> print_string "none "; banyan_add_first branch key value blockstore tagstore) in
-	blockstore, tagstore
-	
-	
-	
-	
-let banyan_add_first_test branch key value blockstore tagstore =
-	
-	let (blockstore, tagstore) = banyan_add_first branch key value blockstore tagstore in
-	
-	let item = match (findtag branch tagstore) with
-		|Some x -> x
-		|None -> failwith "illegal branch" in
-	let item = match item with 
-	|Hash_commit (_, x) -> match x with 
-		|Hash_tree ((_, _, y)::[]) -> match y with
-			|Hash_block z -> match z with 
-				|value -> print_string "tag commit matched\n" 
-				|_ -> print_string "string didnt match" in	
-	 
-	 
-	()
-	
-let banyan_read_test branch key blockstore tagstore =
-
-	let item = match (findtag branch tagstore) with
-		|Some x -> x
-		|None -> failwith "illegal branch" in
-	
-		
-	let item = (match item with 
-	|Hash_commit (_, x) -> match x with 
-		|Hash_tree ((_, _, y)::_) -> match y with
-			|Hash_block z -> match z with 
-				|value -> print_string ("value found: "^value^"\n") 
-				|_ -> print_string "test failed. value not found\n" 
-	
-	) in
-	 
-	()
-	
-let banyan_op branch key value blockstore tagstore =
-	
-	
-	let blockstore, tagstore = banyan_add branch key value blockstore tagstore in 
-	blockstore, tagstore
-	
-	
-let _ = 
-	let tagstore = TagMap.empty in
-	let blockstore = BlockMap.empty in
-	
-	let blockstore, tagstore = banyan_op "branch" "key" "value" blockstore tagstore in
-	let _ = banyan_read_test "branch" "key1" blockstore tagstore in 
-	
-	let blockstore, tagstore = banyan_op "branch" "key1" "value1" blockstore tagstore in
-	let _ = banyan_read_test "branch" "key1" blockstore tagstore in 
-	
-	let blockstore, tagstore = banyan_op "branch1" "key2" "value2" blockstore tagstore in
-	let _ = banyan_read_test "branch" "key" blockstore tagstore in 
-	
-	
-	()
-	(*--------------------------------------------------------------------------------------------------------------*)
-	
-	
+	let tagstore = TagMap.add (Branch "branch") (Hash_commit([], Tree_hash(Content, "path", *)
 	
 	(*let (blockstore, tagstore) = filldummy blockstore tagstore in  (*total discreat testing*)
 	
