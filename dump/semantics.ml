@@ -33,19 +33,19 @@ module TagMap = Map.Make (Tag_module)
 module Block_module = struct
   type t = hash
 
-  let compare t1 t2 = compare t1 t2
-   (*) match (t1, t2) with
-    | Hash_block x, Hash_block y -> print_string "9 ";String.compare x y
-    | Hash_block x, Hash_tree y -> print_string "1 ";1
-    | Hash_block x, Hash_commit y -> print_string "2 ";1
-    | Hash_tree x, Hash_block y -> print_string "8 ";1
+  let rec compare t1 t2 =
+    match (t1, t2) with
+    | Hash_block x, Hash_block y -> String.compare x y
+    | Hash_block x, Hash_tree y -> 1
+    | Hash_block x, Hash_commit y -> 1
+    | Hash_tree x, Hash_block y -> 1
     | ( Hash_tree ((a, b, Hash_block c) :: _),
         Hash_tree ((d, e, Hash_block f) :: _) ) ->
-        print_string "3 -> comparig c and f: "; print_string (c ^ f ^ " "); String.compare c f (*pass different values for every key*)
-    | Hash_tree x, Hash_commit y -> print_string "4 ";1
-    | Hash_commit x, Hash_block y -> print_string "5 ";1
-    | Hash_commit x, Hash_tree y -> print_string "6 ";1
-    | Hash_commit (x, y), Hash_commit (a, b) -> print_string "7 ";compare y b*)
+        String.compare c f (*pass different values for every key*)
+    | Hash_tree x, Hash_commit y -> 1
+    | Hash_commit x, Hash_block y -> 1
+    | Hash_commit x, Hash_tree y -> 1
+    | Hash_commit (x, y), Hash_commit (a, b) -> compare y b
 end
 
 module BlockMap = Map.Make (Block_module)
@@ -84,12 +84,12 @@ let banyan_add_first branch key value blockstore tagstore =
   in
   (blockstore, tagstore)
 
-let banyan_add_new commit_hash branch key value blockstore tagstore = print_string "1";
-  let commit_node = match commit_hash with Hash_commit node -> node in print_string "2";
+let banyan_add_new commit_hash branch key value blockstore tagstore =
+  let commit_node = match commit_hash with Hash_commit node -> node in
   (*node is equivalent to new_commit_node in Hash_commit(new_commit_node))*)
-  let _, tree_hash = commit_node in print_string "3";
+  let _, tree_hash = commit_node in
   (*tree hash is equivalent to Hash_tree(new_tree_node)*)
-  let tree_node_value = BlockMap.find tree_hash blockstore in print_string "4"; (*problem here*)
+  let tree_node_value = BlockMap.find tree_hash blockstore in
   (*tree_node_value should be (Value_tree (Tree (new_tree_node)))*)
   let tree_node =
     match tree_node_value with
@@ -142,27 +142,14 @@ let rec find_tree_node key treelist =
       if String.compare k key == 0 then v else find_tree_node key t
 
 let banyan_read branch key blockstore tagstore =
-  let commit_hash =
+  let item =
     match findtag branch tagstore with
     | Some x -> x
-    | None -> failwith ("illegal branch "^branch)
+    | None -> failwith "illegal branch"
   in
 
-  let commit_node = BlockMap.find commit_hash blockstore in 
-  (match commit_node with
-  |Value_commit (Commit (_, tree_hash)) -> 
-    let tree_node = BlockMap.find tree_hash blockstore in 
-    match tree_node with
-    |Value_tree (Tree (treelist)) -> 
-      let val_hash = find_tree_node key treelist in
-      let v = BlockMap.find val_hash blockstore in
-        (match v with
-            | Value_block (Block (value)) -> print_string ("value found: " ^ value ^ "\n")
-            | _ -> print_string "string didnt match\n" )
-    
-);
-  (*let _ =
-    match commit_hash with
+  let item =
+    match item with
     | Hash_commit (_, x) -> (
         match x with
         | Hash_tree treelist -> (
@@ -173,7 +160,7 @@ let banyan_read branch key blockstore tagstore =
                 | value -> print_string ("value found: " ^ value ^ "\n")
                 | _ -> print_string "string didnt match\n" ) ) )
   in
-*)
+
   ()
 
 (*testing*)
@@ -203,27 +190,23 @@ let test_banyan_add_first branch key value blockstore tagstore =
   ()
 
 let test_banyan_read branch key value blockstore tagstore =
-  let commit_hash =
+  let item =
     match findtag branch tagstore with
     | Some x -> x
     | None -> failwith "illegal branch"
   in
-  let commit_node = BlockMap.find commit_hash blockstore in 
-  (match commit_node with
-  |Value_commit (Commit (_, tree_hash)) -> 
-    let tree_node = BlockMap.find tree_hash blockstore in 
-    match tree_node with
-    |Value_tree (Tree (treelist)) -> 
-      let val_hash = find_tree_node key treelist in
-      let v = BlockMap.find val_hash blockstore in
-        (match v with
-            | Value_block (Block (valu)) -> 
-              match (String.compare valu value) with 
-              | 0 -> print_string ("\nread test passed: " ^ valu ^ "\n")
-              | _ -> print_string ("\nread test failed: " ^ valu ^ "\n" ))
-    
-);
-  
+  let item =
+    match item with
+    | Hash_commit (_, x) -> (
+        match x with
+        | Hash_tree treelist -> (
+            let v = find_tree_node key treelist in
+            match v with
+            | Hash_block z ->
+                if String.compare z value == 0 then
+                  print_string ("read test passed: " ^ value ^ "\n")
+                else print_string "read test failed" ) )
+  in
 
   ()
 
@@ -261,23 +244,23 @@ let rec merge_trees treelist1 treelist2 new_tree_list red_list =
       let new_tree_list =
         match v2 with
         | Hash_block "" ->
-            (* print_string ("in merge " ^ v1 ^ "\n"); *)
+            print_string ("in merge " ^ v1 ^ "\n");
             (c, p, Hash_block v1) :: new_tree_list
         | Hash_block x ->
-            (* print_string ("\nin merge " ^ v1 ^ "\n"); *)
+            print_string ("\nin merge " ^ v1 ^ "\n");
             if String.compare v1 x == 0 then
               let red_list = p :: red_list in
               (c, p, Hash_block v1) :: new_tree_list
             else
               let conflict_string = v1 ^ "_" ^ x in
-              print_string ("\nin merge " ^ p ^ " " ^ conflict_string ^ "\n");
+              print_string ("\nin merge " ^ conflict_string ^ "\n");
               let red_list = p :: red_list in
               (c, p, Hash_block conflict_string) :: new_tree_list
       in
 
       merge_trees t treelist2 new_tree_list red_list
 
-let merge_branches branch1 branch2 blockstore tagstore =
+let merge_branches branch1 branch2 tagstore =
   let c1 =
     match findtag branch1 tagstore with
     | Some x -> x
@@ -292,100 +275,52 @@ let merge_branches branch1 branch2 blockstore tagstore =
   let treelist1 = find_treelist c1 in
   let treelist2 = find_treelist c2 in
 
-  let new_tree_node = merge_trees treelist1 treelist2 [] [] in
-  
-  let blockstore =
-    BlockMap.add (Hash_tree new_tree_node) (Value_tree (Tree new_tree_node))
-      blockstore
-  in
+  let new_treelist = merge_trees treelist1 treelist2 [] [] in
 
-  let new_commit_node = ([ Hash_dummy ], Hash_tree new_tree_node) in
-  (*parent is still dummy, because we are fillingin only types, not values: (hash list * hash) list * hash*)
-  let blockstore =
-    BlockMap.add (Hash_commit new_commit_node)
-      (Value_commit (Commit new_commit_node)) blockstore
-  in
+  let v = find_tree_node "key" new_treelist in
+  ( match v with
+  | Hash_block z ->
+      if String.compare z "value3" == 0 then
+        print_string ("read test passed: " ^ z ^ "\n")
+      else print_string ("read test failed " ^ z) );
 
-  let tagstore =
-  	print_string ("merging: host branch " ^ branch2 ^ "\n");
-    TagMap.add (Branch branch2) (Hash_commit new_commit_node) tagstore
-  in
+  let v = find_tree_node "key2" new_treelist in
+  ( match v with
+  | Hash_block z ->
+      if String.compare z "value2" == 0 then
+        print_string ("read test passed: " ^ z ^ "\n")
+      else print_string "read test failed" );
 
- (blockstore, tagstore)
-
+  ()
 
 let banyan_op branch key value blockstore tagstore =
   let blockstore, tagstore = banyan_add branch key value blockstore tagstore in
   (blockstore, tagstore)
 
-let publish_to_public private_branch public_branch blockstore tagstore =
-	merge_branches private_branch public_branch blockstore tagstore
-
-let publish branch replica blockstore tagstore =
-
-	(* let public_branch = (branch ^ "_public") in *)
-	let latest_commit =(findtag replica tagstore) in
-	match latest_commit with
-	|Some _ -> (
-		let blockstore, tagstore = publish_to_public 
-		branch replica blockstore tagstore in
-		(blockstore, tagstore)
-	)
-	|None ->
-		(let commit = 
-			(match (findtag branch tagstore) with
-			|None -> failwith "illegal branch to merge"
-			|Some x -> x) in 
-			let tagstore = TagMap.add (Branch replica) commit tagstore in 
-
-      (* banyan_op "branch" "key3" "value3" blockstore tagstore;     *)
-		(blockstore, tagstore)
-	)
-
-let refresh branch replica blockstore tagstore =
-  let latest_commit = (findtag replica tagstore) in
-  (match latest_commit with 
-  |Some _ -> let blockstore, tagstore = merge_branches replica branch blockstore tagstore in blockstore, tagstore
-  |None -> print_string "\nno published items\n"; blockstore, tagstore)
-
 let _ =
   let tagstore = TagMap.empty in
   let blockstore = BlockMap.empty in
-  
+
+  let blockstore, tagstore =
+    banyan_op "branch" "key" "value3" blockstore tagstore
+  in
   let blockstore, tagstore =
     banyan_op "branch" "key1" "value1" blockstore tagstore
   in
   let blockstore, tagstore =
-    banyan_op "branch" "key1" "value5" blockstore tagstore
-  in
-  
-  print_string "\npublishing\n";
-  let blockstore, tagstore = publish "branch" "replica1" blockstore tagstore in
-  let _ = test_banyan_read "branch" "key1" "value5" blockstore tagstore in 
-  let _ = test_banyan_read  "replica1" "key1" "value5" blockstore tagstore in 
-  
-  let blockstore, tagstore =
     banyan_op "branch1" "key2" "value2" blockstore tagstore
   in
-  print_string "\npublishing\n";
-  let blockstore, tagstore = publish "branch1" "replica1" blockstore tagstore in
-  let _ = test_banyan_read "branch1" "key2" "value2" blockstore tagstore in 
-  let _ = test_banyan_read  "replica1" "key2" "value2" blockstore tagstore in 
-  
-  let blockstore, tagstore =
-    banyan_op "branch" "key3" "value3" blockstore tagstore
-  in
-  print_string "\npublishing\n";
-  let blockstore, tagstore = publish "branch" "replica1" blockstore tagstore in
-  let _ = test_banyan_read "branch" "key3" "value3" blockstore tagstore in 
-  let _ = test_banyan_read  "replica1" "key3" "value3" blockstore tagstore in 
 
-  print_string "\ntesting refresh\n";
-  let blockstore, tagstore = refresh "branch" "replica1" blockstore tagstore in 
-  let _ = test_banyan_read "branch" "key1" "value5" blockstore tagstore in 
-  let _ = test_banyan_read "branch" "key2" "value2" blockstore tagstore in 
-  let _ = test_banyan_read "branch" "key3" "value3" blockstore tagstore in 
+  let _ = banyan_read "branch" "key1" blockstore tagstore in
+  let _ = banyan_read "branch" "key1" blockstore tagstore in
+  let _ = banyan_read "branch" "key" blockstore tagstore in
 
+  let _ = test_banyan_read "branch" "key" "value3" blockstore tagstore in
+  let _ = test_banyan_read "branch1" "key2" "value2" blockstore tagstore in
+
+  print_string "\nmerging branches\n";
+
+  let _ = merge_branches "branch" "branch1" tagstore in
   ()
 
 (*--------------------------------------------------------------------------------------------------------------*)
@@ -471,4 +406,3 @@ let _ =
 
   ()
 *)
-
