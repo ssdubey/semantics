@@ -2,6 +2,10 @@ Require Import Frap.
 
 Set Implicit Arguments.
 
+(*Basic skeleton of the semantics is ready. It was done with commit type as hash instead of list hash * hash, due to type related issues
+It is fixed now, as shown below but semantics are not modified accordingly. Start from modifying the hash type below. One small 
+theorem is designed to test it. It works fine, but it has to enhanced to check the content of the blockstore and tagstore after addition.
+*)
 
 Inductive content := 
 |Node
@@ -16,7 +20,7 @@ Inductive hash :=
 (*|Hash_commit (c: (list hash * hash)).*)
 |Hash_commit (c: hash).
 
-Definition commit := hash.
+Definition commit :Set := (list hash) * hash.
 Definition tree := list(content * string * hash).
 Definition block := string.
 
@@ -105,16 +109,21 @@ match st with
 |(_, bs, ts) => (bs $? (create_block_hash "value")) = Some (Value_block "value")
 end.*)
 
-Example ex2: exists st, basic_step ((banyan_add (Branch "branch") "key" "value"), $0, $0, Skip) st.
+
+writing basic_step (...) means it will take one step and whatever is the output, it will be assigned to st.
+
+Example ex2: exists st, basic_step^* ((banyan_add (Branch "branch") "key" "value"), $0, $0, Skip) st.
 Proof.
 eexists.
 propositional.
 unfold banyan_add.
+eapply TrcFront.
 
 econstructor.
 
 eapply AssignbsStep.
 econstructor.
+
 Qed.
 
 
