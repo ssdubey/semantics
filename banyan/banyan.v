@@ -17,8 +17,9 @@ Inductive branch :=
 Inductive hash :=
 |Hash_block (b : string)
 |Hash_tree (t: list(content * string * hash))
-(*|Hash_commit (c: (list hash * hash)).*)
-|Hash_commit (c: hash).
+|Hash_commit (c: (list hash * hash))
+|Dummy_hash.
+(*|Hash_commit (c: hash).*)
 
 Definition commit :Set := (list hash) * hash.
 Definition tree := list(content * string * hash).
@@ -27,22 +28,27 @@ Definition block := string.
 Inductive value :=
 |Value_commit (c: commit) (*commit is hash, so hash to be defined first*)
 |Value_tree (t: tree)
-|Value_block (b: block).
+|Value_block (b: block)
+|Dummy_value.
 
-Definition tagstore := fmap branch commit.  (*branch : string -> hash_block (c: commit)*)
+Definition dummy_commit:commit := ([Dummy_hash], Dummy_hash).
+Definition dummy_tree:tree := [(Content, "dummy", Dummy_hash)].
+
+Definition tagstore := fmap branch hash.  (*branch : string -> hash_block (c: commit)*)
 
 Definition blockstore := fmap hash value.   (*hash_block (data:string) -> Value_block(data:string)*)
 
 Definition create_block_hash (b: block) : hash := Hash_block b.
 Definition create_tree_hash (t: tree) : hash := Hash_tree t.
-(*Definition create_commit_hash (c: (list hash * hash)) : hash := Hash_commit c.*)
-Definition create_commit_hash (c: hash) : hash := Hash_commit c.
+Definition create_commit_hash (c: (list hash * hash)) : hash := Hash_commit c.
+(*Definition create_commit_hash (c: hash) : hash := Hash_commit c.*)
 
 Inductive cmd :=
 |Seq : cmd -> cmd -> cmd
 |add_block : value -> cmd
 |Assign : var -> value -> cmd
 |Assign_bs : hash -> value -> cmd
+|Assign_ts : branch -> hash -> cmd
 |Skip: cmd.
 
 
@@ -73,16 +79,18 @@ Definition banyan_add (br: branch) (k: string) (v: string) :=
 (*Seq (Assign_bs (create_block_hash v) (Value_block v)) (Assign_bs (create_block_hash v) (Value_block v)).
 *)
   (let h := create_block_hash v in
-  Assign_bs h (Value_block v) ;; 
+  Assign_bs h (Value_block v) ;;
 
   let t := (Content, k, h)::[] in
   let treehash := create_tree_hash t in
   Assign_bs treehash (Value_tree t);;
 
-  let c := treehash in (*change*)
-  let commithash := treehash in (*change*)
-  Assign_bs commithash (Value_commit c) 
+  let c := ([], treehash) in 
+  let commithash := create_commit_hash c in 
+  Assign_bs commithash (Value_commit c);;
   
+  Assign_ts br commithash
+
   )%cmd.
 
 
@@ -92,11 +100,14 @@ Definition banyan_add (br: branch) (k: string) (v: string) :=
   let t := (Content, k, (create_block_hash v))::[] in
   let bs := Assign_bs (create_tree_hash t) (Value_tree t) bs in (bs, ts).*)
 
-
+(*as of now it is doing main operations*)
 Inductive cmd_step : cmd * blockstore * tagstore -> cmd * blockstore * tagstore -> Prop :=
-|AssignbsStep : forall blockhash blockvalue bs ts,
-  cmd_step ((Assign_bs blockhash blockvalue), bs, ts) (Skip, (bs $+ (blockhash, blockvalue)), ts).
+|Assign_bs_Step : forall blockhash blockvalue bs ts,
+  cmd_step ((Assign_bs blockhash blockvalue), bs, ts) (Skip, (bs $+ (blockhash, blockvalue)), ts)
+|Assign_ts_Step : forall br h bs ts,
+  cmd_step ((Assign_ts br h), bs, ts) (Skip, bs, (ts $+ (br, h))).
 
+(*as of now it is resolving the operations to perform main operations in cmd_step*)
 Inductive basic_step : (cmd * blockstore * tagstore * cmd) -> (cmd * blockstore * tagstore * cmd) -> Prop :=
 |SeqStep : forall c1 c2 k bs ts c1' bs' ts',
   cmd_step (c1, bs, ts) (c1', bs', ts') ->
@@ -110,9 +121,10 @@ match st with
 end.*)
 
 
-writing basic_step (...) means it will take one step and whatever is the output, it will be assigned to st.
-
-Example ex2: exists st, basic_step^* ((banyan_add (Branch "branch") "key" "value"), $0, $0, Skip) st.
+(*writing basic_step (...) means it will take one step and whatever is the output, it will be assigned to st.
+*)
+(*adding first item to db*)
+Example ex1: exists st, basic_step^* ((banyan_add (Branch "branch") "key" "value"), $0, $0, Skip) st.
 Proof.
 eexists.
 propositional.
@@ -120,14 +132,128 @@ unfold banyan_add.
 eapply TrcFront.
 
 econstructor.
-
-eapply AssignbsStep.
 econstructor.
+econstructor.
+
+(*I couldnot find the order in which constructors are applied, even though it is all passing with econstructor.*)
 
 Qed.
 
+(*let h := create_block_hash v in
+  Assign_bs h (Value_block v) ;;
+
+  let t := (Content, k, h)::[] in
+  let treehash := create_tree_hash t in
+  Assign_bs treehash (Value_tree t);;
+
+  let c := ([], treehash) in 
+  let commithash := create_commit_hash c in 
+  Assign_bs commithash (Value_commit c);;
+  
+  Assign_ts br commithash
+-----------------
+*)
+
+Definition searchKey value_tree :=  (*accomodate key k in search*)
+match value_tree with
+| Value_tree t => 
+  match t with
+  | [] => create_block_hash ""
+  | [(_, _, h)] => h
+  | _ => create_block_hash ""
+  end
+| _ => create_block_hash ""
+end.
+  
+
+Definition getSecondInCommit vc :=
+match vc with
+|Value_commit x => 
+  match x with
+  |(_, c) => c
+  end
+|_ => Dummy_hash
+end.
+
+Definition resolve_opt_hash opt_hash :=
+match opt_hash with 
+| Some x => x
+| None => Dummy_hash
+end.
+
+Definition resolve_opt_commit opt_val :=
+match opt_val with
+|Some x => x
+|None => Value_commit dummy_commit
+end.
+
+Definition resolve_opt_tree opt_val :=
+match opt_val with
+|Some x => x
+|None => Value_tree dummy_tree
+end.
+
+(*Definition resolve opt_commit_value :=
+match opt_value with 
+| Some x => x
+| None => create_commit_hash ([], 
+end.
+
+Definition resolve opt_tree_value :=
+match opt_value with 
+| Some x => x
+| None => create_tree_hash []
+end.*)
+
+Definition verify_store_helper (st: cmd * blockstore * tagstore * cmd)  br (v:string) :=
+match st with
+|(_, bs, ts, _) =>
+  let latestCommitHash := resolve_opt_hash (ts $? br) in
+  let value_commit :=  resolve_opt_commit (bs $? latestCommitHash) in
+  let treeHash := getSecondInCommit value_commit in
+  let value_tree := resolve_opt_tree (bs $? treeHash) in
+  let blockHash := searchKey value_tree in  (*accomodate key k in search*)
+  let value_block := (bs $? blockHash) in
+  
+  match value_block with
+  | Some x => 
+    match x with
+    | Value_block v => true
+    | _ => false
+    end
+  | _ => false
+  end
+
+end.
 
 
+Definition verify_store (st: cmd * blockstore * tagstore * cmd) br v := 
+match st with
+|(_,bs,ts,_) => verify_store_helper st br v
+end.
+
+
+
+(*adding and checkinng the first item in the database*)
+Example ex2: exists st, (basic_step^* ((banyan_add (Branch "branch") "key" "value"), $0, $0, Skip) st) /\ 
+                                                          ((verify_store st (Branch "branch") "value") = true).
+Proof.
+eexists.
+propositional.
+unfold banyan_add.
+eapply TrcFront.
+
+econstructor.
+simplify. 
+econstructor.
+simplify.
+econstructor.
+simplify.
+simplify.
+
+discriminate.
+equality.
+Qed.
 
 
 
