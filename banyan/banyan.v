@@ -198,21 +198,23 @@ match (bs $? hashArg) with
 |None => Dummy_value
 end.
 
-Definition read_bs_tree (hashArg : hash) (bs: blockstore) :=
+Definition read_bs_tree (hashArg : hash) (bs: blockstore) :=   (*this is redundant and created only for debugging
+                                                              read_bs should serve its purpose*)
 match (bs $? hashArg) with
-|Some x => x
-|None => Dummy_value
+|Some x => true
+|None => false
 end.
 
-Definition verify_store_helper (st: cmd * blockstore * tagstore * cmd)  br (v:block) :=
+Definition read_store_helper (st: cmd * blockstore * tagstore * cmd)  br (v:block) :=
 match st with
 |(_, bs, ts, _) =>
   let commitHash := read_ts br ts in
   let value_commit :=  read_bs commitHash bs in
   let treeHash := getSecondInCommit value_commit in
   let value_tree := read_bs_tree treeHash bs in 
-  let blockHash := searchKey value_tree in
-blockHash
+value_tree
+  (*let blockHash := searchKey value_tree in
+blockHash*)
   (*let latestCommitHash := resolve_opt_hash (ts $? br) in
   let value_commit :=  resolve_opt_commit (bs $? latestCommitHash) in
   let treeHash := getSecondInCommit value_commit in
@@ -232,16 +234,16 @@ blockHash
 end.
 
 
-Definition verify_store (st: cmd * blockstore * tagstore * cmd) br v := 
+Definition read_store (st: cmd * blockstore * tagstore * cmd) br v := 
 match st with
-|(_,bs,ts,_) => verify_store_helper st br v
+|(_,bs,ts,_) => read_store_helper st br v
 end.
 
 
 
-(*adding and checkinng the first item in the database*)
+(*adding and reading the first item in the database*)
 Example ex2: exists st, (basic_step^* ((banyan_add (Branch "branch") "key" "value"), $0, $0, Skip) st) /\ 
-                                                          ((verify_store_helper st (Branch "branch") "value") = true).
+                                                          ((read_store_helper st (Branch "branch") "value") = true).
 Proof.
 eexists.
 propositional.
@@ -277,8 +279,8 @@ eapply Assign_ts_Step.
 
 econstructor.
 
-unfold verify_store.
-unfold verify_store_helper.
+unfold read_store.
+unfold read_store_helper.
 unfold read_ts.
 simplify.
 unfold read_bs.
@@ -287,7 +289,7 @@ simplify.
 simplify.
 simplify.
 
-unfold read_bs_tree.
+unfold read_bs_tree.  (*since i am debugging, it should return true here, but map is not getting resolved*)
 simplify.
 
 unfold searchKey.
@@ -298,7 +300,7 @@ Admitted.
 
 Qed.*)
 
-
+(*adding second consecutive item in the database*)
 Definition banyan_add2 (br: branch) (k1: string) (v1: string) (k2: string) (v2: string):=
 (let h := create_block_hash v1 in
   Assign_bs h (Value_block v1) ;;
@@ -398,89 +400,10 @@ eapply SeqSolve.
 eapply Assign_ts_Step.
 
 
-econstructor.  (*not sure how its solving everything*)
+econstructor.  (*not sure how its solving everything. state is (Skip, bs, ts, Skip) for 
+                whcih i dont have any semantics*)
 Qed.
 
-
-Definition read_store_helper (st: cmd * blockstore * tagstore * cmd)  br (v:block) :=
-match st with
-|(_, bs, ts, _) =>
-  let latestCommitHash := resolve_opt_hash (ts $? br) in
-  let value_commit :=  resolve_opt_commit (bs $? latestCommitHash) in
-  let treeHash := getSecondInCommit value_commit in
-  let value_tree := resolve_opt_tree (bs $? treeHash) in
-  let blockHash := searchKey value_tree in  (*accomodate key k in search*)
-  let value_block := (bs $? blockHash) in
-
-  match value_block with  (*value_block is of type option value*)
-  | Some x => 
-    match x with
-    | Value_block v => True
-    | _ => False
-    end
-  | _ => False
-  end
-
-end.
-
-
-Definition read_store (st: cmd * blockstore * tagstore * cmd) br v := 
-match st with
-|(_,bs,ts,_) => read_store_helper st br v
-end.
-
-Example ex4: exists st, (basic_step^* ((banyan_add (Branch "branch") "key" "value"), $0, $0, Skip) st) /\ 
-                                                          ((read_store_helper st (Branch "branch") "value")).
-Proof.
-eexists.
-propositional.
-unfold banyan_add.
-
-eapply TrcFront.
-eapply SeqStep.
-eapply TrcFront.
-eapply SeqSolve.
-eapply Assign_bs_Step.
-
-eapply TrcFront.
-eapply SeqStep2.
-eapply TrcFront.
-eapply SeqStep.
-eapply TrcFront.
-eapply SeqSolve.
-eapply Assign_bs_Step.
-
-eapply TrcFront.
-eapply SeqStep2.
-eapply TrcFront.
-eapply SeqStep.
-eapply TrcFront.
-eapply SeqSolve.
-eapply Assign_bs_Step.
-
-eapply TrcFront.
-eapply SeqStep2.
-eapply TrcFront.
-eapply SeqSolve.
-eapply Assign_ts_Step.
-
-econstructor.
-simplify.
-
-(*
-unfold read_store.
-unfold read_store_helper.
-simplify.*)
-econstructor.
-
-unfold verify_store.
-unfold verify_store_helper.
-
-econstructor.
-simplify.
-equality.
-
-Admitted.
 
 Definition isTrue (b:bool) :=
 match b with
@@ -494,98 +417,3 @@ simplify.
 equality.
 
 
-
-(*Inductive commit (*(p: parent) (h: hash)*) := 
-|Commit (c: (list hash * hash)).
-*)
-
-(*Definition hashlist := list hash.
-
-Definition commit := pair hashlist hash.
-*)
-
-
-(*Inductive step : cmd_state -> cmd_state -> Prop := 
-|StepAssign: forall v x e k,
-  step (v, Assign x e, k) (v $+ (x, e), Skip, k)
-|StepSeq : forall v c1 c2 k,
-  step (v, (Seq c1 c2), k) (v, c1, Seq c2 k).
-*)
-
-(*Definition cmd_state:Type := blockstore * cmd * cmd.
-
-Definition cred : Type := branch * string(*key*) * value.
-
-Definition state :Type := cred * blockstore * tagstore.
-
-Inductive banyan_cmd : state -> state -> Prop :=
-|Add_block : forall v blockhash br branc valu bs ts bs' key,
-  blockhash = create_block_hash v ->
-  br = Branch branc -> 
-  valu = Value_block v ->
-  bs' = bs $+ (blockhash, valu) ->
-  banyan_cmd (br, key, valu, bs, ts) (br, key, valu, bs', ts).
-
-Definition state' : Type := string * string * string * blockstore * tagstore. (*b,t,c are not same types, convert them to value and then change the state*)
-
-Inductive banyan_cmd : state' -> state' -> Prop :=
-|Add_block : forall v blockhash val bs ts bs' k br,
-  blockhash = create_block_hash v ->
-  (*val = Value_block v ->*)
-  bs' = bs $+ (blockhash, v) ->
-  banyan_cmd (br, k, v, bs, ts) (br, k, v, bs', ts)
-|Add_tree : forall treehash t val bs' bs ts br k,
-  treehash = create_tree_hash t ->
-  (*val = Value_tree t ->*)
-  bs' = bs $+ (treehash, t) ->
-  banyan_cmd (br, k, t, bs, ts) (br, k, t, bs', ts).
-|Add_commit : forall commithash c val bs' bs ts br brnch ts',
-  commithash = create_commit_hash c ->
-  val = Value_commit c ->
-  bs' = bs $+ (commithash, val) ->
-  br = Branch brnch -> 
-  ts' = ts $+ (br, commithash) ->
-  banyan_cmd (bs, ts) (bs', ts'). *)
-
-(*
-Inductive banyan_cmd : state' -> state' -> Prop :=
-|Add_block : forall v blockhash val bs ts bs',
-  blockhash = create_block_hash v ->
-  val = Value_block v ->
-  bs' = bs $+ (blockhash, val) ->
-  banyan_cmd (bs, ts) (bs', ts)
-|Add_tree : forall treehash t val bs' bs ts,
-  treehash = create_tree_hash t ->
-  val = Value_tree t ->
-  bs' = bs $+ (treehash, val) ->
-  banyan_cmd (bs, ts) (bs', ts)
-|Add_commit : forall commithash c val bs' bs ts br brnch ts',
-  commithash = create_commit_hash c ->
-  val = Value_commit c ->
-  bs' = bs $+ (commithash, val) ->
-  br = Branch brnch -> 
-  ts' = ts $+ (br, commithash) ->
-  banyan_cmd (bs, ts) (bs', ts'). 
-*)
-
-
-
-
-(*Definition valuation := fmap var value.
-*)
-
-(*|StepAddBlock : forall v,
-*)
-(*|StepSkip : forall v,
-step (Skip, k) (k, Skip).
-*)
-Definition banyan_add (b: branch) (k: string) (v: string) (bs: blockstore) (ts: tagstore) :=
-  Assign "val" (Value_block v).
-  
-
-  (*blockstore = add_block value
-  blockstore = add_tree tree;;
-  blockstore, tagstore = add_commit commit.
-*)
-Example eg1:
-  step banyan_add "br" "key" "val" $0 $0.
