@@ -201,8 +201,9 @@ end.
 Definition read_bs_tree (hashArg : hash) (bs: blockstore) :=   (*this is redundant and created only for debugging
                                                               read_bs should serve its purpose*)
 match (bs $? hashArg) with
-|Some x => true
-|None => false
+|Some (Value_tree x) => (Value_tree x)
+|Some _ => Dummy_value
+|None => Dummy_value
 end.
 
 Definition read_store_helper (st: cmd * blockstore * tagstore * cmd)  br (v:block) :=
@@ -212,7 +213,7 @@ match st with
   let value_commit :=  read_bs commitHash bs in
   let treeHash := getSecondInCommit value_commit in
   let value_tree := read_bs_tree treeHash bs in 
-value_tree
+true
   (*let blockHash := searchKey value_tree in
 blockHash*)
   (*let latestCommitHash := resolve_opt_hash (ts $? br) in
@@ -292,7 +293,7 @@ simplify.
 unfold read_bs_tree.  (*since i am debugging, it should return true here, but map is not getting resolved*)
 simplify.
 
-unfold searchKey.
+unfold searchKey. (*search key function is made dummy for debugging*)
 
 simplify.
 Admitted.
@@ -301,7 +302,7 @@ Admitted.
 Qed.*)
 
 (*adding second consecutive item in the database*)
-Definition banyan_add2 (br: branch) (k1: string) (v1: string) (k2: string) (v2: string):=
+Definition banyan_add2 (br1: branch) (k1: string) (v1: string) (br2: branch) (k2: string) (v2: string):=
 (let h := create_block_hash v1 in
   Assign_bs h (Value_block v1) ;;
 
@@ -313,7 +314,7 @@ Definition banyan_add2 (br: branch) (k1: string) (v1: string) (k2: string) (v2: 
   let commithash := create_commit_hash c in 
   Assign_bs commithash (Value_commit c);;
   
-  Assign_ts br commithash;;
+  Assign_ts br1 commithash;;
   
 
 
@@ -328,13 +329,13 @@ Definition banyan_add2 (br: branch) (k1: string) (v1: string) (k2: string) (v2: 
   let commithash2 := create_commit_hash c2 in 
   Assign_bs commithash2 (Value_commit c2);;
   
-  Assign_ts br commithash2
+  Assign_ts br2 commithash2
 
   )%cmd.
 
 
 
-Example ex3: exists st, basic_step^* ((banyan_add2 (Branch "branch") "key1" "value1" "key2" "value2"), 
+Example ex3: exists st, basic_step^* ((banyan_add2 (Branch "branch1") "key1" "value1" (Branch "branch1") "key2" "value2"), 
             $0, $0, Skip) st.
 Proof.
 eexists.
@@ -403,6 +404,130 @@ eapply Assign_ts_Step.
 econstructor.  (*not sure how its solving everything. state is (Skip, bs, ts, Skip) for 
                 whcih i dont have any semantics*)
 Qed.
+
+
+Definition merge_branches (store: cmd * blockstore * tagstore * cmd) (br1 : branch) (br2 : branch) :=
+match store with
+|(_, bs, ts, _) => 
+  (let c1 := read_ts br1 ts in
+  let c2 := read_ts br2 ts in
+
+  let val_t1 := read_bs_tree c1 bs in
+  let val_t2 := read_bs_tree c2 bs in
+
+  let t1 := (match val_t1 with 
+  |Value_tree t1 => t1             (*(let treehash3 := create_tree_hash t1 in Assign_bs treehash3 (Value_tree t1))*)
+  |_=> []                          (*Assign_bs Dummy_hash Dummy_value*)
+  end) in
+  
+  let t2 := (match val_t2 with
+  | Value_tree t2 => t2
+  | _ => []
+  end) in
+
+  let mergedTree := t1 ++ t2 in (*(Content, "mergeKey", Dummy_hash) :: t1 in merge the lists t1 and t2 here*)
+  let treehash3 := create_tree_hash mergedTree in
+  Assign_bs treehash3 (Value_tree mergedTree);;
+
+  let c3 := ([], treehash3) in 
+  let commithash3 := create_commit_hash c3 in 
+  Assign_bs commithash3 (Value_commit c3);;
+  
+  Assign_ts br1 commithash3
+)%cmd
+end.
+
+
+Example ex4: exists st, basic_step^* ((banyan_add2 (Branch "branch1") "key1" "value1" (Branch "branch2") "key2" "value2"), 
+            $0, $0, Skip) st /\ 
+            (exists st2, basic_step^* (merge_branches st (Branch "branch1") (Branch "branch2"), $0, $0, Skip) st2).
+Proof.
+eexists.
+propositional.
+unfold banyan_add2.
+
+eapply TrcFront.
+eapply SeqStep.
+eapply TrcFront.
+eapply SeqSolve.
+eapply Assign_bs_Step.
+
+eapply TrcFront.
+eapply SeqStep2.
+eapply TrcFront.
+eapply SeqStep.
+eapply TrcFront.
+eapply SeqSolve.
+eapply Assign_bs_Step.
+
+eapply TrcFront.
+eapply SeqStep2.
+eapply TrcFront.
+eapply SeqStep.
+eapply TrcFront.
+eapply SeqStep.
+eapply TrcFront.
+eapply SeqSolve.
+eapply Assign_bs_Step.
+
+eapply TrcFront.
+eapply SeqStep2.
+eapply TrcFront.
+eapply SeqSolve.
+eapply Assign_ts_Step.
+
+eapply TrcFront.
+eapply SeqStep2.
+eapply TrcFront.
+eapply SeqStep.
+eapply TrcFront.
+eapply SeqSolve.
+eapply Assign_bs_Step.
+eapply TrcFront.
+eapply SeqStep2.
+eapply TrcFront.
+eapply SeqStep.
+eapply TrcFront.
+eapply SeqSolve.
+eapply Assign_bs_Step.
+eapply TrcFront.
+eapply SeqStep2.
+eapply TrcFront.
+eapply SeqStep.
+eapply TrcFront.
+eapply SeqSolve.
+eapply Assign_bs_Step.
+
+eapply TrcFront.
+eapply SeqStep2.
+eapply TrcFront.
+eapply SeqSolve.
+eapply Assign_ts_Step.
+
+econstructor.
+
+unfold merge_branches.
+
+(*eexists.
+eapply TrcFront.
+eapply SeqStep.
+eapply TrcFront.
+eapply SeqSolve.
+eapply Assign_bs_Step.
+eapply TrcFront.
+eapply SeqStep2.
+eapply TrcFront.
+*)
+econstructor.
+econstructor.
+
+Qed.
+
+
+(*Definition publish (st: cmd * blockstore * tagstore * cmd) (br: branch) (rep: branch) :=*)
+(*publish and refresh are basically merges only. If I am not checking the valid branches, which I dont thinkk is needed
+for semantics, there is nothing else to do more than merge. So not doing publish/refresh for now*)
+
 
 
 Definition isTrue (b:bool) :=
