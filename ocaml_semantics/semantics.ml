@@ -277,6 +277,30 @@ let rec merge_trees treelist1 treelist2 new_tree_list red_list =
 
       merge_trees t treelist2 new_tree_list red_list
 
+let rec find_commit_list current_commit_hash blockstore commit_list =
+  let current_commit = read_blockstore current_commit_hash blockstore in
+  match current_commit with 
+  | Commit ([], c) -> c :: commit_list
+  | Commit (h::[], c) -> 
+      (let commit_list = c :: commit_list in 
+      find_commit_list h blockstore commit_list)
+  | Commit (_, c) -> c :: commit_list   (*fix this to include multiple commits in the parent list*)
+
+let match_commit commit_lst commit_arg_hash =
+  let current_arg_commit = read_blockstore commit_arg_hash blockstore in
+  match current_arg_commit with
+  | Commit ([], c) -> check_list commit_lst current_arg_commit
+  
+
+
+
+(*storing the list of commits from latest to root of one of the branches and 
+then matching that list with the commits of second branch from latest to root. 
+First match is returned as LCA*)
+let find_lca c1 c2 blockstore tagstore =
+  let commit_lst1 = find_commit_list c1 blockstore [] in
+  let lca = match_commit commit_lst1 c2  
+
 let merge_branches branch1 branch2 blockstore tagstore =
   let c1 =
     match findtag branch1 tagstore with
@@ -289,6 +313,9 @@ let merge_branches branch1 branch2 blockstore tagstore =
     | None -> failwith "illegar branch2"
   in
 
+  (*finding LCA of the two branches*)
+  let lca = find_lca c1 c2 blockstore tagstore in
+  
   let treelist1 = find_treelist c1 in
   let treelist2 = find_treelist c2 in
 
