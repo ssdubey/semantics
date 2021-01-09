@@ -3,6 +3,7 @@ open Utils
 open Write
 open Read 
 open Merge
+open Branch
 
 let _ =
   let tagstore = TagMap.empty in
@@ -16,12 +17,14 @@ let _ =
     banyan_op "b1" "b" "2" blockstore tagstore
   in
 
+  let tagstore = create_branch "b2" "b1" tagstore in 
+
   let blockstore, tagstore =
-    banyan_op "b2" "a" "1" blockstore tagstore
+    banyan_op "b1" "b" "3" blockstore tagstore
   in
 
   let blockstore, tagstore =
-    banyan_op "b2" "b" "2" blockstore tagstore
+    banyan_op "b2" "b" "4" blockstore tagstore
   in
 
   let blockstore, tagstore =
@@ -32,7 +35,7 @@ let _ =
     banyan_op "b2" "c" "4" blockstore tagstore
   in
 
-  let blockstore, tagstore = merge_branches "b1" "b2" blockstore tagstore in
+  let blockstore, tagstore = merge_branches "b1" "b2" blockstore tagstore in 
 
   let () = 
     banyan_read "b1" "a" blockstore tagstore;

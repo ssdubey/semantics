@@ -1,0 +1,3 @@
+command to run the code:
+ocamlc -g types.ml utils.ml write.ml read.ml merge.ml branch.ml main.ml
+./a.out
