@@ -20,11 +20,7 @@ let _ =
   let tagstore = create_branch "b2" "b1" tagstore in 
 
   let blockstore, tagstore =
-    banyan_op "b1" "b" "3" blockstore tagstore
-  in
-
-  let blockstore, tagstore =
-    banyan_op "b2" "b" "4" blockstore tagstore
+    banyan_op "b1" "b" "5" blockstore tagstore
   in
 
   let blockstore, tagstore =
@@ -32,7 +28,23 @@ let _ =
   in
 
   let blockstore, tagstore =
-    banyan_op "b2" "c" "4" blockstore tagstore
+    banyan_op "b1" "d" "4" blockstore tagstore
+  in
+
+  let blockstore, tagstore =
+    banyan_op "b2" "c" "5" blockstore tagstore
+  in
+
+  let blockstore, tagstore =
+    banyan_op "b2" "b" "3" blockstore tagstore
+  in
+
+  let blockstore, tagstore =
+    banyan_op "b2" "e" "6" blockstore tagstore
+  in
+
+  let blockstore, tagstore =
+    banyan_op "b1" "f" "6" blockstore tagstore
   in
 
   let blockstore, tagstore = merge_branches "b1" "b2" blockstore tagstore in 
@@ -40,10 +52,14 @@ let _ =
   let () = 
     banyan_read "b1" "a" blockstore tagstore;
     banyan_read "b1" "b" blockstore tagstore;
+    banyan_read "b1" "c" blockstore tagstore;
+    banyan_read "b1" "d" blockstore tagstore;
     banyan_read "b2" "a" blockstore tagstore;
     banyan_read "b2" "b" blockstore tagstore;
-    banyan_read "b1" "c" blockstore tagstore;
     banyan_read "b2" "c" blockstore tagstore;
+    banyan_read "b2" "d" blockstore tagstore;
+    banyan_read "b2" "e" blockstore tagstore;
+    banyan_read "b1" "f" blockstore tagstore;
   in
   ()
   (*let blockstore, tagstore =

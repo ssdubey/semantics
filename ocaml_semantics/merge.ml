@@ -29,7 +29,7 @@ let resolve_conflict lca v1 v2 key blockstore =
   |Hash_block "" -> (v1 ^ "_" ^ v2)
   |Hash_block x -> (x ^ "_" ^ v1 ^ "_" ^ v2)
 
-
+(*add_redlist is to add the keys which are present only in second branch*)
 let rec add_redlist newtreelist redlist treelist =
   let newtreelist =
     match treelist with
@@ -43,9 +43,9 @@ let rec add_redlist newtreelist redlist treelist =
   newtreelist
 
 
-let rec merge_trees treelist1 treelist2 new_tree_list red_list lca blockstore = (*fix this: remove red_list*)
+let rec merge_trees treelist1 treelist2 new_tree_list red_list lca blockstore = 
   match treelist1 with
-  | [] -> blockstore, new_tree_list (*add_redlist new_tree_list red_list treelist2*)
+  | [] -> blockstore, add_redlist new_tree_list red_list treelist2 (*blockstore, new_tree_list *)
   | (c, p, Hash_block v1) :: t ->
       let v2 = findKeyInTree p treelist2 in
 
@@ -55,6 +55,7 @@ let rec merge_trees treelist1 treelist2 new_tree_list red_list lca blockstore = 
             (c, p, Hash_block v1) :: new_tree_list, red_list, blockstore
         | Hash_block x ->
             if String.compare v1 x == 0 then
+              let red_list = p :: red_list in
               (c, p, Hash_block v1) :: new_tree_list, red_list, blockstore
             else
               let conflict_string = resolve_conflict lca v1 x p blockstore in 
