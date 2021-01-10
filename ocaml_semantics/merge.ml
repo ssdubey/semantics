@@ -6,11 +6,11 @@ let rec list_prev_commits commit_hash blockstore commit_list =
   let commit = read_blockstore commit_hash blockstore in
   match commit with 
   | Value_commit(Commit([], cmt)) -> commit :: commit_list
-  | Value_commit(Commit(h::[], cmt)) -> 
+  | Value_commit(Commit(h::t, cmt)) -> 
               (let lst = commit :: commit_list in
               list_prev_commits h blockstore lst)
-  | Value_commit(Commit(h::t, cmt)) -> log("list_prev_commits : multiple parents in commit"); (*fix this*)
-                                      failwith "multiple parents in commit"
+  (*| Value_commit(Commit(h::t, cmt)) -> log("list_prev_commits : multiple parents in commit"); (*fix this*)
+                                      failwith "multiple parents in commit"*)
 
 
 let rec match_commit commit_lst commit_hash blockstore =
@@ -77,14 +77,14 @@ let find_lca c1 c2 blockstore tagstore =
   lca
 
 
-let merge_branches branch1 branch2 blockstore tagstore =
+let merge_branches guestBranch hostBranch blockstore tagstore =
   let c1 =
-    match findtag branch1 tagstore with
+    match findtag guestBranch tagstore with
     | Some x -> x
     | None -> failwith "illegal branch1"
   in
   let c2 =
-    match findtag branch2 tagstore with
+    match findtag hostBranch tagstore with
     | Some x -> x
     | None -> failwith "illegal branch2"
   in
@@ -102,7 +102,7 @@ let merge_branches branch1 branch2 blockstore tagstore =
       blockstore
   in
 
-  let new_commit_node = ([ c1;c2 ], Hash_tree new_tree_node) in
+  let new_commit_node = ([ c2;c1 ], Hash_tree new_tree_node) in (*parent commit of host branch will appear first in the list to find lca easily*)
   (*parent is still dummy, because we are fillingin only types, not values: (hash list * hash) list * hash*)
   let blockstore =
     BlockMap.add (Hash_commit new_commit_node)
@@ -110,8 +110,8 @@ let merge_branches branch1 branch2 blockstore tagstore =
   in
 
   let tagstore =
-  	print_string ("merging: host branch " ^ branch2 ^ "\n");
-    TagMap.add (Branch branch2) (Hash_commit new_commit_node) tagstore
+  	print_string ("merging: host branch " ^ hostBranch ^ "\n");
+    TagMap.add (Branch hostBranch) (Hash_commit new_commit_node) tagstore
   in
 
  (blockstore, tagstore)

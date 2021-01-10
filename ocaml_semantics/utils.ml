@@ -52,10 +52,10 @@ let rec find_commit_list current_commit_hash blockstore commit_list =
   let current_commit = read_blockstore current_commit_hash blockstore in
   match current_commit with 
   | Commit ([], c) -> c :: commit_list
-  | Commit (h::[], c) -> 
+  | Commit (h::t, c) ->         (*first commit in the parent list belongs to the branch in which the new commit node was created after merging*)
       (let commit_list = c :: commit_list in 
       find_commit_list h blockstore commit_list)
-  | Commit (_, c) -> c :: commit_list   (*fix this to include multiple commits in the parent list*)
+  (*| Commit (_, c) -> c :: commit_list *)  (*fix this to include multiple commits in the parent list*)
 
 (*let match_commit commit_lst commit_arg_hash blockstore =
   let current_arg_commit = read_blockstore commit_arg_hash blockstore in
