@@ -18,7 +18,7 @@ let rec match_commit commit_lst commit_hash blockstore =
   match commit with
   | Value_commit(Commit([], cmt)) -> commit_hash (*create initial commit as empty, to make this work correctly*)  (*fix this*)
                                           (*if (List.exists (fun x -> x == cmt) commit_lst) then cmt else (return dummy commit here*)
-  | Value_commit(Commit(h::[], cmt)) -> if (List.exists (fun x -> x = commit) commit_lst) then commit_hash else match_commit commit_lst h blockstore
+  | Value_commit(Commit(h::t, cmt)) -> if (List.exists (fun x -> x = commit) commit_lst) then commit_hash else match_commit commit_lst h blockstore
 
 
 let resolve_conflict lca v1 v2 key blockstore =
