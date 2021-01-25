@@ -209,23 +209,24 @@ let find_lca ?(max_depth = max_int) ?(n = max_int) c1 c2 blockstore tagstore =
           Lwt.return_unit) *)
 
 
-let rec list_prev_commits commit_hash blockstore commit_list =
+(* let rec list_prev_commits commit_hash blockstore commit_list =
   let commit = read_blockstore commit_hash blockstore in
   match commit with 
   | Value_commit(Commit([], cmt)) -> commit :: commit_list
   | Value_commit(Commit(h::t, cmt)) -> 
               (let lst = commit :: commit_list in
-              list_prev_commits h blockstore lst)
+              list_prev_commits h blockstore lst) *)
+              
   (*| Value_commit(Commit(h::t, cmt)) -> log("list_prev_commits : multiple parents in commit"); (*fix this*)
                                       failwith "multiple parents in commit"*)
 
 
-let rec match_commit commit_lst commit_hash blockstore =
+(* let rec match_commit commit_lst commit_hash blockstore =
   let commit = read_blockstore commit_hash blockstore in
   match commit with
   | Value_commit(Commit([], cmt)) -> commit_hash (*create initial commit as empty, to make this work correctly*)  (*fix this*)
                                           (*if (List.exists (fun x -> x == cmt) commit_lst) then cmt else (return dummy commit here*)
-  | Value_commit(Commit(h::t, cmt)) -> if (List.exists (fun x -> x = commit) commit_lst) then commit_hash else match_commit commit_lst h blockstore
+  | Value_commit(Commit(h::t, cmt)) -> if (List.exists (fun x -> x = commit) commit_lst) then commit_hash else match_commit commit_lst h blockstore *)
 
 
 let resolve_conflict lca v1 v2 key blockstore =
@@ -299,16 +300,7 @@ let rec three_way_merge c1 c2 ?max_depth ?n blockstore tagstore =
       let lca = old () in 
       match lca with 
       |Some x -> x
-      |None -> c1  (*fix this: c1 should be replaced with some suitable value*)
-
-
-      (* let merge =
-        merge t ~info
-        |> Merge.with_conflict (fun msg ->
-               Fmt.strf "Recursive merging of common ancestors: %s" msg)
-        |> Merge.f
-      in *)
-      (* merge ~old c1 c2 *)
+      |None -> failwith "no lca found"  (*fix this: c1 should be replaced with some suitable value*)
       
 
 let merge_branches guestBranch hostBranch blockstore tagstore =
@@ -324,11 +316,6 @@ let merge_branches guestBranch hostBranch blockstore tagstore =
   in
 
   let lca = three_way_merge c1 c2 blockstore tagstore in
-  (*finding LCA of the two branches*)
-  (* let lca = find_lca c1 c2 blockstore tagstore in 
-
-    let lca = match lca with 
-    | Ok (x::lst) -> x in *)
 
   let treelist1 = find_treelist c1 blockstore in 
   let treelist2 = find_treelist c2 blockstore in  
