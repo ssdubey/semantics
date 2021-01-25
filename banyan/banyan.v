@@ -610,10 +610,17 @@ match mark with
 |LCA => SeenBoth
 |_ => mark
 end.
+(*
+Definition pop (q: queue_commit) :=
+match q with 
+|[] => None
+|x::xs => Some (x, xs)
+end.*)
 
 Fixpoint loop t mark todo :=
-match (pop todo) with
-|Some (a, todo) => (
+match todo with
+|[] => t
+|a::todo =>(
   let old_mark := get_mark t a in 
   let t := set_mark t mark a in 
   let todo :=
@@ -626,7 +633,6 @@ match (pop todo) with
   let m := aux2 mark in
   loop t m todo
 )
-|None => t
 end.
 
 
