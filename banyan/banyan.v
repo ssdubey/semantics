@@ -143,15 +143,15 @@ econstructor.
 Qed.
 
 
-Definition searchKey value_tree :=  (*accomodate key k in search*)
+Definition searchKey (k: string) value_tree :=  
 match value_tree with
 | Value_tree t => 
   match t with
-  | [] => true (*create_block_hash ""*)
-  | [(_, _, h)] => true (*h*)
-  | _ => true (*create_block_hash ""*)
+  | [] => create_block_hash ""
+  | [(_, key, h)] => if (k =? key) then h else create_block_hash ""
+  | _ => create_block_hash ""
   end
-| _ => true (*create_block_hash ""*)
+| _ => create_block_hash ""
 end.
   
 
@@ -182,10 +182,6 @@ match opt_val with
 |None => Value_tree dummy_tree
 end.
 
-(*Inductive read_semantics : (cmd * option hash) -> (cmd * option hash) -> Prop :=
-|Read_ts_step : forall br ts,
-  read_semantics (Read_ts br ts, None) (Skip, ts $? br).*)
-
 Definition read_ts (br: branch) (ts: tagstore) :=
 match (ts $? br) with
 |Some x => x
@@ -206,21 +202,14 @@ match (bs $? hashArg) with
 |None => Dummy_value
 end.
 
-Definition read_store_helper (st: cmd * blockstore * tagstore * cmd)  br (v:block) :=
+Definition read_store_helper (st: cmd * blockstore * tagstore * cmd)  br (key: string) (v:block) :=
 match st with
 |(_, bs, ts, _) =>
-  let commitHash := read_ts br ts in
-  let value_commit :=  read_bs commitHash bs in
-  let treeHash := getSecondInCommit value_commit in
-  let value_tree := read_bs_tree treeHash bs in 
-true
-  (*let blockHash := searchKey value_tree in
-blockHash*)
-  (*let latestCommitHash := resolve_opt_hash (ts $? br) in
+  let latestCommitHash := resolve_opt_hash (ts $? br) in
   let value_commit :=  resolve_opt_commit (bs $? latestCommitHash) in
   let treeHash := getSecondInCommit value_commit in
   let value_tree := resolve_opt_tree (bs $? treeHash) in
-  let blockHash := searchKey value_tree in  (*accomodate key k in search*)
+  let blockHash := searchKey key value_tree in  
   let value_block := (bs $? blockHash) in
   
   match value_block with
@@ -231,20 +220,12 @@ blockHash*)
     end
   | _ => false
   end
-*)
+
 end.
-
-
-Definition read_store (st: cmd * blockstore * tagstore * cmd) br v := 
-match st with
-|(_,bs,ts,_) => read_store_helper st br v
-end.
-
-
 
 (*adding and reading the first item in the database*)
 Example ex2: exists st, (basic_step^* ((banyan_add (Branch "branch") "key" "value"), $0, $0, Skip) st) /\ 
-                                                          ((read_store_helper st (Branch "branch") "value") = true).
+                                                          ((read_store_helper st (Branch "branch") "key" "value") = true).
 Proof.
 eexists.
 propositional.
@@ -254,6 +235,7 @@ eapply TrcFront.
 eapply SeqStep.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_block_hash.
 eapply Assign_bs_Step.
 
 eapply TrcFront.
@@ -262,6 +244,7 @@ eapply TrcFront.
 eapply SeqStep.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_tree_hash.
 eapply Assign_bs_Step.
 
 eapply TrcFront.
@@ -270,36 +253,27 @@ eapply TrcFront.
 eapply SeqStep.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_commit_hash.
+unfold create_tree_hash.
 eapply Assign_bs_Step.
 
 eapply TrcFront.
 eapply SeqStep2.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_commit_hash.
+unfold create_tree_hash.
 eapply Assign_ts_Step.
 
 econstructor.
 
-unfold read_store.
 unfold read_store_helper.
 unfold read_ts.
 simplify.
-unfold read_bs.
+unfold create_block_hash.
 simplify.
-
-simplify.
-simplify.
-
-unfold read_bs_tree.  (*since i am debugging, it should return true here, but map is not getting resolved*)
-simplify.
-
-unfold searchKey. (*search key function is made dummy for debugging*)
-
-simplify.
-Admitted.
-(*econstructor.
-
-Qed.*)
+equality.
+Qed.
 
 (*adding second consecutive item in the database*)
 Definition banyan_add2 (br1: branch) (k1: string) (v1: string) (br2: branch) (k2: string) (v2: string):=
@@ -346,6 +320,7 @@ eapply TrcFront.
 eapply SeqStep.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_block_hash.
 eapply Assign_bs_Step.
 
 eapply TrcFront.
@@ -354,6 +329,8 @@ eapply TrcFront.
 eapply SeqStep.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_tree_hash.
+unfold create_block_hash.
 eapply Assign_bs_Step.
 
 eapply TrcFront.
@@ -364,12 +341,16 @@ eapply TrcFront.
 eapply SeqStep.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_commit_hash.
+unfold create_tree_hash.
 eapply Assign_bs_Step.
 
 eapply TrcFront.
 eapply SeqStep2.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_commit_hash.
+unfold create_tree_hash.
 eapply Assign_ts_Step.
 
 eapply TrcFront.
@@ -378,30 +359,40 @@ eapply TrcFront.
 eapply SeqStep.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_block_hash.
 eapply Assign_bs_Step.
+
 eapply TrcFront.
 eapply SeqStep2.
 eapply TrcFront.
 eapply SeqStep.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_tree_hash.
 eapply Assign_bs_Step.
+
 eapply TrcFront.
 eapply SeqStep2.
 eapply TrcFront.
 eapply SeqStep.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_commit_hash.
+unfold create_block_hash.
+unfold create_tree_hash.
 eapply Assign_bs_Step.
 
 eapply TrcFront.
 eapply SeqStep2.
 eapply TrcFront.
 eapply SeqSolve.
+unfold create_commit_hash.
+unfold create_tree_hash.
+unfold create_block_hash.
 eapply Assign_ts_Step.
 
-
-econstructor.  (*not sure how its solving everything. state is (Skip, bs, ts, Skip) for 
+debug eauto.
+(*econstructor.*)  (*not sure how its solving everything. state is (Skip, bs, ts, Skip) for 
                 whcih i dont have any semantics*)
 Qed.
 
@@ -508,27 +499,224 @@ econstructor.
 
 unfold merge_branches.
 
-(*eexists.
-eapply TrcFront.
-eapply SeqStep.
-eapply TrcFront.
-eapply SeqSolve.
-eapply Assign_bs_Step.
-eapply TrcFront.
-eapply SeqStep2.
-eapply TrcFront.
-*)
 econstructor.
 econstructor.
 
 Qed.
+
+(*-----------lca------------*)
+
+Definition queue_commit := list hash.
+
+Definition empty_queue_commit : queue_commit := nil.
+
+Fixpoint reverse_aux (lst:list hash) acc :=
+match lst with
+|[] => acc
+|(x::xs) => reverse_aux xs (x::acc)
+end.
+
+Definition reverse lst := reverse_aux lst [].
+
+Definition push (q: queue_commit) x :=
+reverse (x :: (reverse q)).
+
+Definition pop (q: queue_commit) :=
+match q with 
+|[] => None
+|x::xs => Some (x, xs)
+end.
+
+Inductive seen :=
+|Seen1
+|Seen2
+|LCA
+|SeenBoth.
+
+Definition set := list hash.
+Definition empty_set : set := nil.
+Definition set_add (a:hash) (x:set) : set := a::x.
+
+(*Definition marks := fmap hash var.   (*commit -> seen (String)*)
+Definition parents := fmap hash hash.  (*commit -> parent commit*)
+Definition layers := fmap nat hash. (*depth -> commit*)
+Definition complet:bool := false.
+*)
+
+Record empty_state := create_empty_state {marks:fmap hash seen; c1: hash; c2: hash; parents: fmap hash (list hash); 
+layers: fmap nat hash; complete: bool; depth: nat}.
+
+Definition add_parents t c p := 
+let p := parents t $+ (c, p) in 
+create_empty_state (marks t) (c1 t) (c2 t) p (layers t) (complete t) (depth t).
+
+Definition get_parent t c := parents t $? c.
+
+Definition add_to_layer t d c:= 
+let l := layers t $+ (d, c) in 
+create_empty_state (marks t) (c1 t) (c2 t) (parents t) l (complete t) (depth t).
+
+Definition get_layer t d := 
+match (layers t $? d) with
+| Some h => set_add h empty_set
+| None => empty_set
+end.
+
+Definition get_mark t elt := marks t $? elt.
+
+Definition set_mark t mark elt := 
+let m := marks t $+ (elt, mark) in 
+create_empty_state m (c1 t) (c2 t) (parents t) (layers t) (complete t) (depth t).
+
+Definition check_complete (s:empty_state) := complete s = true.
+
+Definition set_complete t b :=
+create_empty_state (marks t) (c1 t) (c2 t) (parents t) (layers t) b (depth t).
+
+Definition set_depth t d := 
+create_empty_state (marks t) (c1 t) (c2 t) (parents t) (layers t) (complete t) (d+1).
+
+Definition both_seen t c := 
+match get_mark t c with
+|None |Some Seen1 |Some Seen2 => false
+|_ => true
+end.
+
+Definition check_all_both_seen (layer: set) := (*include t in the argument*)
+match layer with
+|[] => false
+|x :: xs => true (*modify this to check if all items are true*)
+end.
+
+Definition check_not_eq (d:nat) (e: nat) := 
+if (Nat.eqb d e) then false else true.
+
+Fixpoint push_in_queue todo commits :=
+match commits with
+|[] => todo
+|h::t => (
+        let todo := push todo h in 
+        push_in_queue todo t)
+end.
+
+Definition aux1 t a todo :=
+match (get_parent t a) with
+|Some x => (push_in_queue todo x)
+|None => todo
+end.
+
+Definition aux2 mark :=
+match mark with 
+|LCA => SeenBoth
+|_ => mark
+end.
+
+Fixpoint loop t mark todo :=
+match (pop todo) with
+|Some (a, todo) => (
+  let old_mark := get_mark t a in 
+  let t := set_mark t mark a in 
+  let todo :=
+    match old_mark with
+    |Some (SeenBoth | LCA) => todo
+    |Some mark => todo
+    |_ => aux1 t a todo
+    end
+  in
+  let m := aux2 mark in
+  loop t m todo
+)
+|None => t
+end.
+
+
+Definition update_ancestor_marks t mark commit :=
+let todo := empty_queue in 
+let todo := push todo commit in
+loop t mark todo
+
+
+
+Definition update_ancestor t mark parents := 
+match parents with
+|[] =>
+|h::[] => update_ancestor_marks t mark h
+|h::t => update_ancestor_marks t mark h; update_ancestor t mark t
+
+Definition update_parents t d commit parents := 
+let t := add_parents t commit parents in
+let t := add_to_layer t d commit in 
+
+let t := 
+  if (check_not_eq d (depth t)) then
+  (
+    let layer := get_layer t (depth t) in 
+    let comp := check_all_both_seen layer in (*include t in the argument*)
+    let t := if (comp) then (set_complete t true) else (set_depth t d) in 
+    t  
+  )else(
+    t
+  ) in 
+
+let mark := get_mark t commit in 
+update_ancestor t mark parents.
+
+Definition find_lca (c1:hash) (c2:hash) :=
+(*if (c1 = c2) then c1 
+else*)  (*considering it is always false for now*)
+let init := empty_set in 
+let init := set_add c1 init in 
+let init := set_add c2 init in 
+let s := create_empty_state $0 c1 c2 $0 $0 false in 
+
+
+
+Definition three_way_merge (c1:hash) (c2:hash) bs ts :=
+(*if (c1 = c2) then c1 
+else*)  (*considering it is always false for now*)
+let lca := find_lca c1 c2  in 
+lca.
+
+Definition merge_branches_with_lca (store: cmd * blockstore * tagstore * cmd) (br1 : branch) (br2 : branch) :=
+match store with
+|(_, bs, ts, _) => 
+  (let c1 := read_ts br1 ts in
+  let c2 := read_ts br2 ts in
+
+  let lca := three_way_merge c1 c2 bs ts in 
+
+  let val_t1 := read_bs_tree c1 bs in
+  let val_t2 := read_bs_tree c2 bs in
+
+  let t1 := (match val_t1 with 
+  |Value_tree t1 => t1             (*(let treehash3 := create_tree_hash t1 in Assign_bs treehash3 (Value_tree t1))*)
+  |_=> []                          (*Assign_bs Dummy_hash Dummy_value*)
+  end) in
+  
+  let t2 := (match val_t2 with
+  | Value_tree t2 => t2
+  | _ => []
+  end) in
+
+  let mergedTree := t1 ++ t2 in (*(Content, "mergeKey", Dummy_hash) :: t1 in merge the lists t1 and t2 here*)
+  let treehash3 := create_tree_hash mergedTree in
+  Assign_bs treehash3 (Value_tree mergedTree);;
+
+  let c3 := ([], treehash3) in 
+  let commithash3 := create_commit_hash c3 in 
+  Assign_bs commithash3 (Value_commit c3);;
+  
+  Assign_ts br1 commithash3
+)%cmd
+end.
+
 
 
 (*Definition publish (st: cmd * blockstore * tagstore * cmd) (br: branch) (rep: branch) :=*)
 (*publish and refresh are basically merges only. If I am not checking the valid branches, which I dont thinkk is needed
 for semantics, there is nothing else to do more than merge. So not doing publish/refresh for now*)
 
-
+Definition dummyMap := fmap (nat nat.
 
 Definition isTrue (b:bool) :=
 match b with
