@@ -599,6 +599,37 @@ match commits with
         push_in_queue todo t)
 end.
 
+Definition equal_keys (commit1:hash) (commit2:hash) := (*fix this: implement*)
+true.
+
+Definition check_shared mark :=
+match mark with 
+|SeenBoth => true
+|LCA => true
+|_ => false
+end.
+
+Definition update_mark t mark commit :=
+let mark1 := get_mark t commit in
+let new_mark :=
+match (mark, mark1) with 
+|(Seen1, Some Seen1) | (Seen1, None) => Seen1
+|(Seen2, Some Seen2) | (Seen2, None) => Seen2
+|(SeenBoth, Some LCA) => SeenBoth
+|(SeenBoth, _) => SeenBoth
+|(Seen1, Some Seen2) | (Seen2, Some Seen1) => LCA 
+|(_, Some LCA) => LCA
+|_ => SeenBoth
+end 
+in 
+let is_init := equal_keys commit (c1 t) || equal_keys commit (c2 t) in
+let is_shared := check_shared new_mark in 
+let t := (if (is_shared && is_init) then set_complete t true else t) in
+let t := set_mark t new_mark commit in
+(t, new_mark).
+
+(*Definition aux1 (_:empty_state) (_:hash) (todo:list hash) := todo.*)
+
 Definition aux1 t a todo :=
 match (get_parent t a) with
 |Some x => (push_in_queue todo x)
@@ -610,36 +641,95 @@ match mark with
 |LCA => SeenBoth
 |_ => mark
 end.
-(*
-Definition pop (q: queue_commit) :=
-match q with 
-|[] => None
-|x::xs => Some (x, xs)
-end.*)
 
-Fixpoint loop t mark todo :=
+Fixpoint loop todo t mark (next:list hash) {struct todo}:=
 match todo with
-|[] => t
-|a::todo =>(
+|[] => (t, next, mark)
+|a::xs =>(
   let old_mark := get_mark t a in 
-  let t := set_mark t mark a in 
-  let todo :=
+  let (t, mark) := update_mark t mark a in 
+  let next :=
     match old_mark with
-    |Some (SeenBoth | LCA) => todo
-    |Some mark => todo
-    |_ => aux1 t a todo
+    |Some (SeenBoth | LCA) => next
+    |Some m => (match m with |mark => next end)
+    |_ => let nextround := aux1 t a next in nextround
     end
   in
   let m := aux2 mark in
-  loop t m todo
+  loop xs t m next
 )
 end.
 
+Check loop.
+
+Fixpoint loophelper todo t mark :=
+let '(t, next, mark') := loop todo t mark [] in 
+match next with
+|[] => (t, next, mark)
+|h::hx => loop next t mark' []
+end.
+
+(*Fixpoint loop_num2 (repeat: bool) (lst: list nat) {struct repeat}:=
+match repeat with
+|true => (
+        match lst with
+        |[] => loop_num2 true []
+        |h::t => loop_num2 true t
+        end)
+|false => false 
+end.*)
+(*Fixpoint loop_num (lst: list nat) :=
+match lst with
+|[] => 5
+|h::[] => loop_num lst
+|h::t => loop_num t
+end.
+*)
+
+
+(*Fixpoint loop todo t mark :=
+match todo with
+|[] => t
+|a::xs =>(
+  let old_mark := get_mark t a in 
+  let (t, mark) := update_mark t mark a in 
+  let todo1 :=
+    match old_mark with
+    |Some (SeenBoth | LCA) => xs
+    |Some mark => xs
+    |_ => aux1 t a xs
+    end
+  in
+  let m := aux2 mark in
+  loop todo1 t m
+)
+end.
+*)
+
+(*Fixpoint loop todo t mark nextround {struct todo}:=
+match todo with
+|[] => (t, nextround)
+|a::xs =>(
+  let old_mark := get_mark t a in 
+  let (t, mark) := update_mark t mark a in 
+  let (nextround, todo1) :=
+    match old_mark with
+    |Some (SeenBoth | LCA) => (nextround, xs)
+    |Some m => (match m with |mark => (nextround, xs) end)
+    |_ => let nextround := aux1 t a nextround in (nextround, xs)
+    end
+  in
+  let m := aux2 mark in
+  loop todo1 t m nextround
+)
+end.*)
+
+ 
 
 Definition update_ancestor_marks t mark commit :=
-let todo := empty_queue in 
+let todo := empty_queue_commit in 
 let todo := push todo commit in
-loop t mark todo
+loophelper todo t mark.
 
 
 
