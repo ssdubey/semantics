@@ -665,79 +665,27 @@ Check loop.
 Fixpoint loophelper todo t mark :=
 let '(t, next, mark') := loop todo t mark [] in 
 match next with
-|[] => (t, next, mark)
+|[] => (t, next, mark')
 |h::hx => loop next t mark' []
 end.
 
-(*Fixpoint loop_num2 (repeat: bool) (lst: list nat) {struct repeat}:=
-match repeat with
-|true => (
-        match lst with
-        |[] => loop_num2 true []
-        |h::t => loop_num2 true t
-        end)
-|false => false 
-end.*)
-(*Fixpoint loop_num (lst: list nat) :=
-match lst with
-|[] => 5
-|h::[] => loop_num lst
-|h::t => loop_num t
-end.
-*)
-
-
-(*Fixpoint loop todo t mark :=
-match todo with
-|[] => t
-|a::xs =>(
-  let old_mark := get_mark t a in 
-  let (t, mark) := update_mark t mark a in 
-  let todo1 :=
-    match old_mark with
-    |Some (SeenBoth | LCA) => xs
-    |Some mark => xs
-    |_ => aux1 t a xs
-    end
-  in
-  let m := aux2 mark in
-  loop todo1 t m
-)
-end.
-*)
-
-(*Fixpoint loop todo t mark nextround {struct todo}:=
-match todo with
-|[] => (t, nextround)
-|a::xs =>(
-  let old_mark := get_mark t a in 
-  let (t, mark) := update_mark t mark a in 
-  let (nextround, todo1) :=
-    match old_mark with
-    |Some (SeenBoth | LCA) => (nextround, xs)
-    |Some m => (match m with |mark => (nextround, xs) end)
-    |_ => let nextround := aux1 t a nextround in (nextround, xs)
-    end
-  in
-  let m := aux2 mark in
-  loop todo1 t m nextround
-)
-end.*)
-
- 
 
 Definition update_ancestor_marks t mark commit :=
 let todo := empty_queue_commit in 
 let todo := push todo commit in
-loophelper todo t mark.
+let '(t, _, _) := loophelper todo t mark in
+t.
 
 
 
-Definition update_ancestor t mark parents := 
+Fixpoint update_ancestor t mark parents := 
 match parents with
-|[] =>
-|h::[] => update_ancestor_marks t mark h
-|h::t => update_ancestor_marks t mark h; update_ancestor t mark t
+|[] => t
+|h::[] => let t := update_ancestor_marks t mark h in t
+|h::tl => let t := update_ancestor_marks t mark h in update_ancestor t mark tl
+end.
+
+
 
 Definition update_parents t d commit parents := 
 let t := add_parents t commit parents in
@@ -755,7 +703,13 @@ let t :=
   ) in 
 
 let mark := get_mark t commit in 
-update_ancestor t mark parents.
+let t := 
+match mark with
+|Some m => update_ancestor t m parents
+|None => t
+end
+in
+t.
 
 Definition find_lca (c1:hash) (c2:hash) :=
 (*if (c1 = c2) then c1 
