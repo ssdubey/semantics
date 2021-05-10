@@ -1,6 +1,6 @@
 open Types
 
-let log content = print_string ("log: " ^ content)
+let log content = print_string ("log: " ^ content ^"\n")
 
 let read_tagstore br tagstore =
   try Some (TagMap.find br tagstore) with _ -> None
