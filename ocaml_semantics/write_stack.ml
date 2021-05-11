@@ -27,7 +27,7 @@ let rec fillStacks key tree_hash bp_stack ap_stack blockstore =
     let (bp_stack, ap_stack) = (
       match treenode with
       |Value_tree(Tree treelist) -> 
-        let tuple = searchTreeList keyterm treelist in
+        (let tuple = searchTreeList keyterm treelist in
         match tuple with
         |Some (p, ((c, k, v)::t)) -> 
           log ("pushing "^p^" to bp_stack");
@@ -37,14 +37,19 @@ let rec fillStacks key tree_hash bp_stack ap_stack blockstore =
         |None -> 
           let ap_stack = fill_ap_stack key ap_stack in
           (bp_stack, ap_stack)
+        )
+        |Value_block _ -> 
+          (let ap_stack = fill_ap_stack key ap_stack in
+          (bp_stack, ap_stack)
+          )
     ) in
     (bp_stack, ap_stack)
   )
   
-let rec create_fill_ap_treenode ap_stack treehash blockstore =
+let rec create_fill_ap_treenode ap_stack treenode treehash blockstore =
   if (Stack.is_empty ap_stack) then
     let () = log "create_fill_ap_treenode: stack empty" in
-    (treehash, blockstore)
+    (treenode, blockstore)
   else 
     let () = log "create_fill_ap_treenode: stack has values" in
     let k = Stack.pop ap_stack in
@@ -54,9 +59,13 @@ let rec create_fill_ap_treenode ap_stack treehash blockstore =
     let blockstore =
       BlockMap.add treehash (Value_tree (Tree treenode)) blockstore
     in
-    create_fill_ap_treenode ap_stack treehash blockstore
+    create_fill_ap_treenode ap_stack treenode treehash blockstore
 
 let rec search_replace k lst treehash new_treelist =
+let dummyitem = 
+(match treehash with 
+|Hash_tree (treelist) -> treelist ) in
+
   match lst with
   |[] -> new_treelist
   |(c, p, v)::t -> 
@@ -82,7 +91,62 @@ let rec create_fill_bp_treenode bp_stack treehash blockstore =
       let blockstore =
         BlockMap.add treehash (Value_tree (Tree new_treenode)) blockstore
       in
+      let valu = BlockMap.find treehash blockstore in
+      ignore @@ valu;
       create_fill_bp_treenode bp_stack treehash blockstore
+
+
+let rec getHostNode p lst blockstore =
+  match lst with 
+  |(c, k, v)::t -> 
+    if (String.compare p k == 0) then
+      (* (c, k, v) *)
+      BlockMap.find v blockstore (*it can be a value or a tree node*)
+    else
+      getHostNode p t blockstore
+
+let rec searchGuestInHost guestKey hostTreeNodeList treenode newTreenode = (*treenode and newtreenode are lists*)
+  match hostTreeNodeList with
+  |[] -> treenode @ newTreenode (*combining*)
+  |(c, p, v)::t -> 
+    if (String.compare p guestKey == 0) then 
+      let newTreenode = (treenode@t)@newTreenode in (*replacing*)
+        newTreenode
+    else
+      let newTreenode = (c, p, v)::newTreenode in 
+        searchGuestInHost guestKey t treenode newTreenode
+
+let combine_or_replace_treenode host_node treenode blockstore =
+  (*-search for the correct node in host node. 
+  -find its valhash and then its list of contents
+  -find key element of treenode
+  -search for key elemnt in the list
+  -if found, replace it with the tree node, else combine it with treenode
+  -return its treehash*)
+
+  let hostnode = 
+    (match host_node with 
+    |(p, lst) -> getHostNode p lst blockstore) in
+
+  let guestKey = 
+    (match treenode with
+    |(_, p, _)::[] -> p
+    |_::t -> failwith "write_stack: there should be single element here") in
+
+  (*searchGuestInHost hostnode guestKey*)
+  let newTreenodelist = 
+    (match hostnode with
+    |Value_block _ -> treenode (*replacing*)
+    |Value_tree (Tree hostTreeNodeList) -> 
+      let newTreenode = searchGuestInHost guestKey hostTreeNodeList treenode [] in
+      newTreenode) in
+  
+  let treehash = Hash_tree (newTreenodelist) in
+    let blockstore =
+        BlockMap.add treehash (Value_tree (Tree newTreenodelist)) blockstore
+    in
+    (treehash, blockstore) 
+
 
 let create_fill_ap_bp_treenode ap_stack bp_stack value blockstore =
   let blob_hash = Hash_block value in
@@ -96,7 +160,8 @@ let create_fill_ap_bp_treenode ap_stack bp_stack value blockstore =
   let blockstore =
     BlockMap.add treehash (Value_tree (Tree treenode)) blockstore
   in
-  let (treehash, blockstore) = create_fill_ap_treenode ap_stack treehash blockstore in (*the returned treehash will go as argument to prev key term*)
+  let (treenode, blockstore) = create_fill_ap_treenode ap_stack treenode treehash blockstore in (*the returned treehash will go as argument to prev key term*)
+  let (treehash, blockstore) = combine_or_replace_treenode (Stack.top bp_stack) (*needs its child list*) treenode (*combine or replace with this*) blockstore in
   let (treehash, blockstore) = create_fill_bp_treenode bp_stack treehash blockstore in
   (treehash, blockstore)
 
@@ -129,9 +194,23 @@ let rec create_fill_only_bp_treenode bp_stack treehash blockstore =
       in
       create_fill_only_bp_treenode bp_stack treehash blockstore
 
+let combineAtRoot root_tree_hash treehash blockstore =
+  let root_tree_node = BlockMap.find root_tree_hash blockstore in
+  let treenode = BlockMap.find treehash blockstore in
+  let combined_treelist = 
+    match root_tree_node, treenode with
+    |(Value_tree (Tree rootlist)), (Value_tree (Tree treelist)) -> (rootlist @ treelist) in
+    
+  let combined_treehash = Hash_tree (combined_treelist) in
+  let blockstore = 
+          BlockMap.add combined_treehash (Value_tree (Tree combined_treelist))
+            blockstore
+      in
+  (combined_treehash, blockstore)
 
-let rec create_fill_only_ap_treenode ap_stack treehash blockstore =
+let rec create_fill_only_ap_treenode ap_stack root_tree_hash treehash blockstore =
   if (Stack.is_empty ap_stack) then
+    let (treehash, blockstore) = combineAtRoot root_tree_hash treehash blockstore in
     (treehash, blockstore)
   else
     let p = Stack.pop ap_stack in
@@ -141,7 +220,7 @@ let rec create_fill_only_ap_treenode ap_stack treehash blockstore =
             BlockMap.add treehash (Value_tree (Tree newtreelist))
             blockstore
     in
-    create_fill_only_ap_treenode ap_stack treehash blockstore
+    create_fill_only_ap_treenode ap_stack root_tree_hash treehash blockstore
 
 
 
@@ -200,7 +279,7 @@ let banyan_add_new commit_hash branch key value blockstore tagstore =
               blockstore
       in
 
-    let (treehash, blockstore) = create_fill_only_ap_treenode ap_stack treehash blockstore in
+    let (treehash, blockstore) = create_fill_only_ap_treenode ap_stack root_tree_hash treehash blockstore in
 
     let new_commit_node = ([commit_hash], treehash) in
       let blockstore =

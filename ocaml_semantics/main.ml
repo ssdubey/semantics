@@ -5,7 +5,7 @@ open Write_stack
 open Read_multikey
 open Merge3
 open Branch
-open Write_read
+open Test1_write_read
 
 let _ =
   let tagstore = TagMap.empty in

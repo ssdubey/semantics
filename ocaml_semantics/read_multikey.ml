@@ -9,7 +9,7 @@ let rec searchList k tree_node =
     else 
       failwith ("read_multikey:6: key not found in the list. Check if the tree node is correct)")
   |Value_tree (Tree ((node, p, vh)::t)) -> 
-    if (String.compare k p != 0) then 
+    if (String.compare k p == 0) then 
       (Tree [(node, k, vh)]) 
     else 
       searchList k (Value_tree(Tree t))
