@@ -1,0 +1,34 @@
+w [a;b;c;d] -> value1
+w [a;b;c] -> value2
+r [a;b;c;d] -> ERROR
+
+
+w [a;b;c;d] -> value1
+w [a;b;c;e] -> value2
+r [a;b;c;d] -> value1
+r [a;b;c;e] -> value2
+
+
+w [a] -> value1
+w [a] -> value2
+r [a] -> value2
+
+w [a;b] -> value1
+w [a;b] -> value2
+r [a;b] -> value2
+
+w [a;b] -> value1
+w [b] -> value2
+r [a;b] -> value1
+r [b] -> value2
+
+w [a;b] -> value1
+w [b;a] -> value2
+r [a;b] -> value1
+r [b;a] -> value2
+
+w [a;b;c] -> value1
+w [a;b;c;d] -> value2
+r [a;b;c;d] -> value2
+r [a;b;c] -> ERROR 
+
